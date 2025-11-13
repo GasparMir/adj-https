@@ -56,6 +56,56 @@ services:
       - certbot-conf:/etc/letsencrypt:ro
     depends_on:
       - frontend
+  
+  certbot:
+    image: certbot/certbot:latest
+    container_name: certbot
+    restart: always
+    volumes:
+      - certbot-conf:/etc/letsencrypt
+    entrypoint: >
+      sh -c '
+        set -e;
+        echo "🔐 Verificando certificados existentes...";
+        if [ ! -f /etc/letsencrypt/live/localhost/fullchain.pem ]; then
+          echo "⚙️  No se encontró certificado, generando uno de prueba...";
+          mkdir -p /etc/letsencrypt/live/localhost;
+          openssl req -x509 -nodes -days 365 \
+            -newkey rsa:2048 \
+            -keyout /etc/letsencrypt/live/localhost/privkey.pem \
+            -out /etc/letsencrypt/live/localhost/fullchain.pem \
+            -subj "/CN=localhost";
+        fi;
+
+        echo "🔄 Convirtiendo a PKCS12...";
+        apk add --no-cache openssl > /dev/null 2>&1 || true;
+        openssl pkcs12 -export \
+          -in /etc/letsencrypt/live/localhost/fullchain.pem \
+          -inkey /etc/letsencrypt/live/localhost/privkey.pem \
+          -out /etc/letsencrypt/live/localhost/keystore.p12 \
+          -name "tomcat" \
+          -password pass:changeit;
+
+        echo "✅ Certificado PKCS12 generado en /etc/letsencrypt/live/localhost/keystore.p12";
+        echo "🕐 Esperando para próxima renovación (12h)...";
+        while true; do
+          sleep 12h;
+          echo "🔁 Renovando certificado de prueba...";
+          openssl req -x509 -nodes -days 365 \
+            -newkey rsa:2048 \
+            -keyout /etc/letsencrypt/live/localhost/privkey.pem \
+            -out /etc/letsencrypt/live/localhost/fullchain.pem \
+            -subj "/CN=localhost";
+          openssl pkcs12 -export \
+            -in /etc/letsencrypt/live/localhost/fullchain.pem \
+            -inkey /etc/letsencrypt/live/localhost/privkey.pem \
+            -out /etc/letsencrypt/live/localhost/keystore.p12 \
+            -name "tomcat" \
+            -password pass:changeit;
+          echo "♻️  Certificado PKCS12 renovado";
+        done
+      '
+
 
 volumes:
   adj-volume:
