@@ -2,57 +2,59 @@ pipeline {
     agent any
 
     stages {
-        // Etapa para detener los servicios o en todo caso hacer caso omiso si no existen
-        stage('Parando los servicios') {
+        // Parar los servicios que ya existen o en todo caso hacer caso omiso
+        stage('Parando los servicios...') {
             steps {
-                sh '''
-                    docker-compose -p adj-demo down || true
+                bat '''
+                    docker compose -p adj-10b down || exit /b 0
                 '''
             }
         }
 
-        // Eliminar las imagenes creadas por este proyecto
-        stage('Eliminando imagenes anteriores') {
+        // Eliminar las imágenes creadas por ese proyecto
+        stage('Eliminando imágenes anteriores...') {
             steps {
-                sh '''
-                    IMAGES=$(docker images --filter "label=com.docker.compose.project=adj-demo" -q)
-                    if [ -n "$IMAGES" ]; then
-                        docker rmi -f $IMAGES || true
-                    else
-                        echo "No hay imagenes para eliminar"
-                    fi
+                bat '''
+                    for /f "tokens=*" %%i in ('docker images --filter "label=com.docker.compose.project=adj-10b" -q') do (
+                        docker rmi -f %%i
+                    )
+                    if errorlevel 1 (
+                        echo No hay imagenes por eliminar
+                    ) else (
+                        echo Imagenes eliminadas correctamente
+                    )
                 '''
             }
         }
 
-        // Del recurso SCM configurado en el job, jala el repositorio
-        stage('Clonando el repositorio') {
+        // Del recurso SCM configurado en el job, jala el repo
+        stage('Obteniendo actualización...') {
             steps {
                 checkout scm
             }
         }
 
         // Construir y levantar los servicios
-        stage('Construyendo y levantando los servicios') {
+        stage('Construyendo y desplegando servicios...') {
             steps {
-                sh '''
-                    docker-compose up --build -d
+                bat '''
+                    docker compose up --build -d
                 '''
             }
         }
     }
-    
+
     post {
         success {
-            echo 'El pipeline se ejecutó correctamente.'
+            echo 'Pipeline ejecutado con éxito'
         }
 
         failure {
-            echo 'El pipeline falló.'
+            echo 'Hubo un error al ejecutar el pipeline'
         }
 
         always {
-            echo 'El pipeline ha finalizado.'
+            echo 'Pipeline finalizado'
         }
     }
 }
